@@ -238,7 +238,7 @@ class Provider extends AbstractProvider
     {
         if ($this->configurations === null) {
             try {
-                $configUrl = rtrim($this->getConfig('base_url'), '/') . '/.well-known/openid-configuration';
+                $configUrl = self::BASE_URL. '/.well-known/openid-configuration';
 
                 $response = $this->getHttpClient()->get($configUrl);
 
@@ -259,7 +259,7 @@ class Provider extends AbstractProvider
      */
     protected function getJwks()
     {
-        $cacheKey = 'oidc_jwks_' . md5($this->getConfig('base_url'));
+        $cacheKey = 'oidc_jwks_' . md5(self::BASE_URL);
         
         return Cache::remember($cacheKey, 3600, function () {
             $config = $this->getOpenIdConfig();
@@ -342,18 +342,9 @@ class Provider extends AbstractProvider
     protected function verifyAndDecodeJWT($jwt)
     {
         try {
-            // Check if a specific public key is provided in config
-            $publicKey = $this->getConfig('jwt_public_key');
-            
-            if ($publicKey) {
-                // Use provided public key
-                $decoded = JWT::decode($jwt, new Key($publicKey, 'RS256'));
-            } else {
-                // Fetch JWKS and verify using key set
-                $jwks = $this->getJwks();
-                $keySet = JWK::parseKeySet($jwks);
-                $decoded = JWT::decode($jwt, $keySet);
-            }
+            $jwks = $this->getJwks();
+            $keySet = JWK::parseKeySet($jwks);
+            $decoded = JWT::decode($jwt, $keySet);
 
             // Convert to object format for compatibility
             $payload = json_decode(json_encode($decoded));
