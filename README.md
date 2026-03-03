@@ -1,6 +1,6 @@
 # OpenID Telegram Connect (OIDC) Provider for Laravel Socialite
 
-![Laravel Support: v9, v10, v11, v12](https://img.shields.io/badge/Laravel%20Support-v9%2C%20v10%2C%20v11-blue) ![PHP Support: 8.1, 8.2, 8.3](https://img.shields.io/badge/PHP%20Support-8.1%2C%208.2%2C%208.3-blue)
+![Laravel Support: v9, v10, v11, v12](https://img.shields.io/badge/Laravel%20Support-v9%2C%20v10%2C%20v11%2C%20v12-blue) ![PHP Support: 8.1, 8.2, 8.3](https://img.shields.io/badge/PHP%20Support-8.1%2C%208.2%2C%208.3-blue)
 
 ## Installation & Basic Usage
 
