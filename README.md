@@ -30,7 +30,7 @@ In Laravel 11, the default `EventServiceProvider` provider was removed. Instead,
 
 ```php
 Event::listen(function (\SocialiteProviders\Manager\SocialiteWasCalled $event) {
-    $event->extendSocialite('telegram-oidc', \SocialiteProviders\OIDC\Provider::class);
+    $event->extendSocialite('telegram-oidc', \SocialiteProviders\TelegramOIDC\Provider::class);
 });
 ```
 
