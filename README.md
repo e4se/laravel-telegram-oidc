@@ -60,15 +60,15 @@ return Socialite::driver('telegram-oidc')->redirect();
 
 - `id`
 - `name`
-- `phone_number`
+- `nickname`
+- `avatar`
 
 More fields are available under the `user` subkey:
 
 ```php
 $user = Socialite::driver('telegram-oidc')->user();
 
-$picture = $user->user['preferred_username'];
-$preferred_username = $user->user['picture'];
+$phone_number = $user->user['phone_number'];
 ```
 
 ### Customizing the scopes

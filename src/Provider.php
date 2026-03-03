@@ -41,11 +41,11 @@ class Provider extends AbstractProvider
         'openid',
 
         // Returns the phone claim, which contains the user's phone
-        // phone
+        // phone_number
         'phone',
 
         // Returns claims that represent basic profile information
-        // name, id, preferred_username, phone_number, picture
+        // name, id, preferred_username, picture
         'profile',
     ];
 
@@ -75,10 +75,7 @@ class Provider extends AbstractProvider
     public static function additionalConfigKeys()
     {
         return [
-            'base_url',
-            'scopes',
-            'verify_jwt',
-            'jwt_public_key',
+            'scopes'
         ];
     }
 
@@ -391,11 +388,15 @@ class Provider extends AbstractProvider
      */
     protected function mapUserToObject(array $user)
     {
-        return (new User())->setRaw($user)->map(
+        return (new User())
+            ->setRaw($user)
+            ->setRaw
+            ->map(
             [
                 'id' => $user['id'],
-                'phone' => $user['phone_number'] ?? null,
-                'name' => $user['name'] ?? null
+                'name' => $user['name'] ?? null,
+                'nickname' => $user['preferred_username'] ?? null,
+                'avatar'=> $user['picture'] ?? null,
             ]
         );
     }
