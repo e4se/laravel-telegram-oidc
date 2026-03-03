@@ -40,10 +40,6 @@ class Provider extends AbstractProvider
         // Also presents in an ID Token : iss, aud, exp, iat, c_hash.
         'openid',
 
-        // Returns the phone claim, which contains the user's phone
-        // phone_number
-        'phone',
-
         // Returns claims that represent basic profile information
         // name, id, preferred_username, picture
         'profile',

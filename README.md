@@ -73,7 +73,7 @@ $phone_number = $user->user['phone_number'];
 
 ### Customizing the scopes
 
-You may extend the default scopes (`openid phone profile`) by adding a `scopes` option to your OIDC service configuration and separate multiple scopes with a space:
+You may extend the default scopes (`openid profile`) by adding a `scopes` option to your OIDC service configuration and separate multiple scopes with a space:
 
 ```php
 'telegram-oidc' => [
@@ -81,7 +81,7 @@ You may extend the default scopes (`openid phone profile`) by adding a `scopes` 
     'client_secret' => env('TELEGRAM_OIDC_CLIENT_SECRET'),
     'redirect' => env('TELEGRAM_OIDC_REDIRECT_URI'),
     
-    'scopes' => 'openid phone profile',
+    'scopes' => 'phone',
     // or
     'scopes' => env('TELEGRAM_OIDC_SCOPES'),
 ],
