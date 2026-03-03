@@ -1,0 +1,36 @@
+{
+  "name": "e4se/laravel-telegram-oidc",
+  "description": "OpenID Telegram Connect OAuth2 Provider for Laravel Socialite",
+  "keywords": [
+    "laravel",
+    "oauth",
+    "provider",
+    "socialite",
+    "oidc",
+    "telegram"
+  ],
+  "homepage": "https://github.com/e4se/laravel-telegram-oidc",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Alexander Morozov",
+      "email": "e4se96@gmail.com",
+      "homepage": "https://github.com/e4se",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": "^8.1",
+    "ext-json": "*",
+    "socialiteproviders/manager": "^4.0",
+    "illuminate/http": "^9.0 | ^10.0 | ^11.0 | ^12.0",
+    "illuminate/support": "^9.0 | ^10.0 | ^11.0 | ^12.0",
+    "firebase/php-jwt": "^6.4|^7.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "SocialiteProviders\\TelegramOIDC\\": "src"
+    }
+  },
+  "minimum-stability": "stable"
+}
