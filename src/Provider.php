@@ -386,7 +386,6 @@ class Provider extends AbstractProvider
     {
         return (new User())
             ->setRaw($user)
-            ->setRaw
             ->map(
             [
                 'id' => $user['id'],
