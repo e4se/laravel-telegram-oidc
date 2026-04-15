@@ -4,7 +4,6 @@ namespace SocialiteProviders\TelegramOIDC;
 
 use Exception;
 use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
 use Firebase\JWT\JWK;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
@@ -12,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
 use JsonException;
+use SocialiteProviders\Manager\Contracts\ConfigInterface;
 use SocialiteProviders\Manager\OAuth2\AbstractProvider;
 use SocialiteProviders\Manager\OAuth2\User;
 
@@ -58,21 +58,29 @@ class Provider extends AbstractProvider
     protected bool $usesNonce = true;
 
     /**
-     * Indicates if JWT signature verification should be enabled.
-     * Can be overridden by config 'verify_jwt'.
-     *
-     * @var bool
-     */
-    protected bool $verifyJwt = true;
-
-    /**
      * {@inheritdoc}
      */
     public static function additionalConfigKeys()
     {
         return [
-            'scopes'
+            'scopes',
+            'proxy',
+            'connect_timeout',
+            'timeout',
+            'use_pkce',
         ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setConfig(ConfigInterface $config)
+    {
+        parent::setConfig($config);
+
+        $this->configureHttpClient();
+
+        return $this;
     }
 
     /**
@@ -125,7 +133,16 @@ class Provider extends AbstractProvider
      */
     protected function getUserInfoUrl()
     {
-        return $this->getOpenIdConfig()['userinfo_endpoint'];
+        $userInfoUrl = $this->getOpenIdConfig()['userinfo_endpoint'] ?? null;
+
+        if (! is_string($userInfoUrl) || $userInfoUrl === '') {
+            throw new ConfigurationFetchingException(
+                'Telegram OIDC does not currently expose a separate userinfo endpoint. ' .
+                'Use the ID token returned by the authorization code flow.'
+            );
+        }
+
+        return $userInfoUrl;
     }
 
     /**
@@ -178,6 +195,14 @@ class Provider extends AbstractProvider
     }
 
     /**
+     * Telegram recommends PKCE for the authorization code flow.
+     */
+    protected function usesPKCE()
+    {
+        return (bool) $this->getProviderConfigValue('use_pkce', true);
+    }
+
+    /**
      * Determine if the provider is operating with nonce.
      *
      * @return bool
@@ -198,13 +223,30 @@ class Provider extends AbstractProvider
     }
 
     /**
-     * Determine if JWT signature verification is enabled.
-     *
-     * @return bool
+     * Apply provider-level HTTP client options while preserving explicit guzzle overrides.
      */
-    protected function shouldVerifyJwt()
+    protected function configureHttpClient(): void
     {
-        return $this->verifyJwt;
+        $configuredOptions = array_filter([
+            'proxy' => $this->getProviderConfigValue('proxy'),
+            'connect_timeout' => $this->getProviderConfigValue('connect_timeout'),
+            'timeout' => $this->getProviderConfigValue('timeout'),
+        ], static fn ($value) => $value !== null && $value !== '');
+
+        if ($configuredOptions === []) {
+            return;
+        }
+
+        $this->guzzle = array_replace($configuredOptions, $this->guzzle);
+        $this->httpClient = null;
+    }
+
+    /**
+     * Read a top-level provider config value without treating explicit false as "missing".
+     */
+    protected function getProviderConfigValue(string $key, mixed $default = null): mixed
+    {
+        return array_key_exists($key, $this->config) ? $this->config[$key] : $default;
     }
 
     /**
@@ -284,13 +326,19 @@ class Provider extends AbstractProvider
             throw new InvalidStateException("Callback: invalid state.", 401);
         }
 
-        $tokenResponse = $this->getAccessTokenResponse($this->request->input('code'));
+        $code = $this->request->input('code');
 
-        // Decrypt JWT token
-        $payload = $this->decodeJWT(
-            $tokenResponse['id_token'],
-            $this->request->input('code')
-        );
+        if (! is_string($code) || $code === '') {
+            throw new InvalidCodeException('Callback: missing authorization code.', 400);
+        }
+
+        $tokenResponse = $this->getAccessTokenResponse($code);
+
+        if (! isset($tokenResponse['id_token']) || ! is_string($tokenResponse['id_token'])) {
+            throw new InvalidTokenException('Token response: missing id_token.', 401);
+        }
+
+        $payload = $this->decodeJWT($tokenResponse['id_token']);
 
         $this->user = $this->mapUserToObject((array)$payload);
 
@@ -299,30 +347,9 @@ class Provider extends AbstractProvider
             ->setExpiresIn($tokenResponse['expires_in']);
     }
 
-    protected function decodeJWT($jwt, $code)
+    protected function decodeJWT($jwt)
     {
-        if ($this->shouldVerifyJwt()) {
-            return $this->verifyAndDecodeJWT($jwt);
-        }
-        
-        // Fallback to original behavior for backward compatibility
-        try {
-            [$jwt_header, $jwt_payload, $jwt_signature] = explode(".", $jwt);
-            $payload = json_decode($this->base64url_decode($jwt_payload));
-        } catch (Exception $e) {
-            throw new InvalidTokenException('JWT: Failed to parse.', 401);
-        }
-
-        if ($this->isInvalidNonce($payload->nonce ?? null)) {
-            throw new InvalidNonceException('JWT: Contains an invalid nonce.', 401);
-        }
-
-        // Clear nonce from session after successful validation to prevent replay attacks
-        if ($this->usesNonce()) {
-            $this->request->session()->forget('nonce');
-        }
-
-        return $payload;
+        return $this->verifyAndDecodeJWT($jwt);
     }
 
     /**
@@ -340,10 +367,16 @@ class Provider extends AbstractProvider
             $decoded = JWT::decode($jwt, $keySet);
 
             // Convert to object format for compatibility
-            $payload = json_decode(json_encode($decoded));
+            $payload = json_decode(json_encode($decoded, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
 
-            if ($this->isInvalidNonce($payload->nonce)) {
+            $this->assertValidIdTokenClaims($payload);
+
+            if ($this->isInvalidNonce($payload->nonce ?? null)) {
                 throw new InvalidNonceException('JWT: Contains an invalid nonce.', 401);
+            }
+
+            if ($this->usesNonce()) {
+                $this->request->session()->forget('nonce');
             }
 
             return $payload;
@@ -354,14 +387,32 @@ class Provider extends AbstractProvider
             throw new JwtVerificationException('JWT: Invalid signature.', 401);
         } catch (\Firebase\JWT\InvalidTokenException $e) {
             throw new JwtVerificationException('JWT: Invalid token format.', 401);
+        } catch (JsonException $e) {
+            throw new JwtVerificationException('JWT: Failed to decode payload.', 401);
         } catch (Exception $e) {
             throw new JwtVerificationException('JWT: Verification failed - ' . $e->getMessage(), 401);
         }
     }
 
-    private function base64url_decode($data)
+    /**
+     * JWT::decode() already validates time-based claims, including configured leeway.
+     * This helper only checks claims Firebase JWT does not enforce for us.
+     */
+    protected function assertValidIdTokenClaims(object $payload): void
     {
-        return base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
+        if (($payload->iss ?? null) !== self::BASE_URL) {
+            throw new JwtVerificationException('JWT: Invalid issuer.', 401);
+        }
+
+        $audience = $payload->aud ?? null;
+        $expectedAudience = (string) $this->clientId;
+        $tokenAudiences = is_array($audience)
+            ? array_map('strval', $audience)
+            : (is_scalar($audience) ? [(string) $audience] : []);
+
+        if (! in_array($expectedAudience, $tokenAudiences, true)) {
+            throw new JwtVerificationException('JWT: Invalid audience.', 401);
+        }
     }
 
     /**
@@ -388,10 +439,10 @@ class Provider extends AbstractProvider
             ->setRaw($user)
             ->map(
             [
-                'id' => $user['id'],
+                'id' => $user['id'] ?? $user['sub'],
                 'name' => $user['name'] ?? null,
                 'nickname' => $user['preferred_username'] ?? null,
-                'avatar'=> $user['picture'] ?? null,
+                'avatar' => $user['picture'] ?? null,
             ]
         );
     }
@@ -402,14 +453,19 @@ class Provider extends AbstractProvider
      */
     public function getAccessTokenResponse($code)
     {
+        $tokenFields = array_merge(
+            $this->getTokenFields($code),
+            [
+                'grant_type' => 'authorization_code',
+            ]
+        );
+
+        unset($tokenFields['client_secret']);
+
         $response = $this->getHttpClient()->post($this->getTokenUrl(), [
+            RequestOptions::AUTH => [$this->clientId, $this->clientSecret],
             RequestOptions::HEADERS => ['Accept' => 'application/json'],
-            RequestOptions::FORM_PARAMS => array_merge(
-                $this->getTokenFields($code),
-                [
-                    'grant_type' => 'authorization_code',
-                ]
-            ),
+            RequestOptions::FORM_PARAMS => $tokenFields,
         ]);
 
         return json_decode((string)$response->getBody(), true, 512, JSON_THROW_ON_ERROR);
