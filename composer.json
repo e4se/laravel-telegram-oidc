@@ -27,9 +27,17 @@
     "illuminate/support": "^9.0 | ^10.0 | ^11.0 | ^12.0",
     "firebase/php-jwt": "^6.4|^7.0"
   },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5 || ^11.0 || ^12.0"
+  },
   "autoload": {
     "psr-4": {
       "SocialiteProviders\\TelegramOIDC\\": "src"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "SocialiteProviders\\TelegramOIDC\\Tests\\": "tests/"
     }
   },
   "minimum-stability": "stable"
